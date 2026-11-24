@@ -83,3 +83,4 @@ curl http://localhost:8080/exports/grades.csv
 - A student can only submit once per exercise.
 - A submission sent after the deadline day is marked as late.
 - Points are entered on the exercise's scale (10, 20, 40…) and converted to a grade out of 20.
+- Each started day of delay reduces the grade by 10%, up to a maximum penalty of 50%. The teacher-entered points remain unchanged; the final grade includes the penalty.

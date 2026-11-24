@@ -56,15 +56,20 @@ public class GradeReport {
             } else {
                 LocalDateTime submittedAt = ((Timestamp) row.get("submitted_at")).toLocalDateTime();
                 line.put("submittedAt", submittedAt);
-                line.put("late", submittedAt.toLocalDate().isAfter(deadline));
+                long lateDays = LatePenalty.daysLate(deadline, submittedAt.toLocalDate());
+                line.put("late", lateDays > 0);
+                line.put("lateDays", lateDays);
                 if (row.get("raw_points") == null) {
                     line.put("status", "EN ATTENTE DE CORRECTION");
                     line.put("grade", null);
                 } else {
                     BigDecimal raw = (BigDecimal) row.get("raw_points");
                     BigDecimal max = (BigDecimal) row.get("max_points");
-                    BigDecimal grade = raw.multiply(new BigDecimal("20")).divide(max, 1, RoundingMode.HALF_UP);
+                    LatePenalty.Result penalty = LatePenalty.calculate(raw, max, deadline, submittedAt.toLocalDate());
+                    BigDecimal grade = penalty.grade();
                     line.put("status", "CORRIGÉ");
+                    line.put("rawGrade", penalty.rawGrade());
+                    line.put("penaltyPercent", penalty.penaltyPercent());
                     line.put("grade", grade);
                     line.put("feedback", row.get("feedback"));
                     total = total.add(grade);

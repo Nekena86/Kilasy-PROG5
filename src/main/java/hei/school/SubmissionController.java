@@ -60,7 +60,8 @@ public class SubmissionController {
 
         LocalDate deadline = ((java.sql.Date) exercises.get(0).get("deadline")).toLocalDate();
         LocalDateTime now = LocalDateTime.now();
-        boolean late = now.toLocalDate().isAfter(deadline);
+        long lateDays = LatePenalty.daysLate(deadline, now.toLocalDate());
+        boolean late = lateDays > 0;
 
         jdbcTemplate.update(
                 "INSERT INTO submission (exercise_id, student_id, content, repo_url, submitted_at) VALUES (?, ?, ?, ?, ?)",
@@ -71,6 +72,7 @@ public class SubmissionController {
         result.put("id", submissionId);
         result.put("submittedAt", now);
         result.put("late", late);
+        result.put("lateDays", lateDays);
         result.put("message", late ? "Soumission enregistrée, mais en retard" : "Soumission enregistrée");
         return ResponseEntity.status(201).body(result);
     }
@@ -94,12 +96,18 @@ public class SubmissionController {
         result.put("content", row.get("content"));
         result.put("repoUrl", row.get("repo_url"));
         result.put("submittedAt", submittedAt);
-        result.put("late", submittedAt.toLocalDate().isAfter(deadline));
+        LatePenalty.Result penalty = row.get("raw_points") == null ? null : LatePenalty.calculate(
+                (BigDecimal) row.get("raw_points"), (BigDecimal) row.get("max_points"), deadline,
+                submittedAt.toLocalDate());
+        long lateDays = LatePenalty.daysLate(deadline, submittedAt.toLocalDate());
+        result.put("late", lateDays > 0);
+        result.put("lateDays", lateDays);
         if (row.get("raw_points") != null) {
             double raw = ((BigDecimal) row.get("raw_points")).doubleValue();
-            double max = ((BigDecimal) row.get("max_points")).doubleValue();
             result.put("rawPoints", raw);
-            result.put("grade", Math.round(raw / max * 20 * 10) / 10.0);
+            result.put("rawGrade", penalty.rawGrade());
+            result.put("penaltyPercent", penalty.penaltyPercent());
+            result.put("grade", penalty.grade());
             result.put("feedback", row.get("feedback"));
         }
         return ResponseEntity.ok(result);
@@ -130,12 +138,12 @@ public class SubmissionController {
         jdbcTemplate.update("UPDATE submission SET raw_points = ?, feedback = ?, graded_at = now() WHERE id = ?",
                 points, feedback, id);
 
-        // grade out of 20
-        double grade = Math.round(points / max * 20 * 10) / 10.0;
-
         LocalDate deadline = ((java.sql.Date) row.get("deadline")).toLocalDate();
         LocalDateTime submittedAt = ((Timestamp) row.get("submitted_at")).toLocalDateTime();
-        boolean late = submittedAt.toLocalDate().isAfter(deadline);
+        LatePenalty.Result penalty = LatePenalty.calculate(BigDecimal.valueOf(points), BigDecimal.valueOf(max),
+                deadline, submittedAt.toLocalDate());
+        double grade = penalty.grade().doubleValue();
+        boolean late = penalty.daysLate() > 0;
 
         // notify the student by email
         String fullName = (String) row.get("full_name");
@@ -147,6 +155,11 @@ public class SubmissionController {
         message.setSubject("Kilasy : nouvelle note pour " + title);
         String text = "Bonjour " + firstName + ",\n\n"
                 + "Ta note pour « " + title + " » est disponible : " + grade + "/20.\n";
+        if (late) {
+            text += "Note avant pénalité : " + penalty.rawGrade() + "/20. "
+                    + "Pénalité de retard : " + penalty.penaltyPercent() + "% ("
+                    + penalty.daysLate() + " jour(s)).\n";
+        }
         if (feedback != null && !feedback.isBlank()) {
             text += "\nCommentaire de l'enseignant : " + feedback + "\n";
         }
@@ -159,8 +172,11 @@ public class SubmissionController {
         result.put("id", id);
         result.put("rawPoints", points);
         result.put("maxPoints", max);
+        result.put("rawGrade", penalty.rawGrade());
         result.put("grade", grade);
         result.put("late", late);
+        result.put("lateDays", penalty.daysLate());
+        result.put("penaltyPercent", penalty.penaltyPercent());
         result.put("feedback", feedback);
         return ResponseEntity.ok(result);
     }

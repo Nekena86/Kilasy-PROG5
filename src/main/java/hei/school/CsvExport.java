@@ -28,15 +28,22 @@ public class CsvExport {
                         + "ORDER BY st.full_name, e.deadline");
 
         StringBuilder csv = new StringBuilder();
-        csv.append("reference;etudiant;email;promotion;exercice;echeance;soumis_le;en_retard;note_sur_20\n");
+        csv.append("reference;etudiant;email;promotion;exercice;echeance;soumis_le;en_retard;jours_retard;")
+                .append("note_brute_sur_20;penalite_pourcentage;note_sur_20\n");
         for (Map<String, Object> row : rows) {
             String note = "";
+            String rawGrade = "";
+            String penaltyPercent = "";
+            java.time.LocalDate deadline = ((java.sql.Date) row.get("deadline")).toLocalDate();
+            java.time.LocalDate submittedDate = ((java.sql.Timestamp) row.get("submitted_at")).toLocalDateTime().toLocalDate();
             if (row.get("raw_points") != null) {
-                double n = ((BigDecimal) row.get("raw_points")).doubleValue()
-                        / ((BigDecimal) row.get("max_points")).doubleValue() * 20;
-                n = Math.floor(n * 10) / 10;
-                note = String.valueOf(n).replace('.', ',');
+                LatePenalty.Result penalty = LatePenalty.calculate((BigDecimal) row.get("raw_points"),
+                        (BigDecimal) row.get("max_points"), deadline, submittedDate);
+                rawGrade = penalty.rawGrade().toPlainString().replace('.', ',');
+                penaltyPercent = String.valueOf(penalty.penaltyPercent());
+                note = penalty.grade().toPlainString().replace('.', ',');
             }
+            long lateDays = LatePenalty.daysLate(deadline, submittedDate);
             csv.append(row.get("reference")).append(';')
                     .append(row.get("full_name")).append(';')
                     .append(row.get("email")).append(';')
@@ -45,6 +52,9 @@ public class CsvExport {
                     .append(row.get("deadline")).append(';')
                     .append(row.get("submitted_at")).append(';')
                     .append(Boolean.TRUE.equals(row.get("late")) ? "oui" : "non").append(';')
+                    .append(lateDays).append(';')
+                    .append(rawGrade).append(';')
+                    .append(penaltyPercent).append(';')
                     .append(note).append('\n');
         }
 
