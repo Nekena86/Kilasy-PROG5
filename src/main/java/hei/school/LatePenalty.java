@@ -5,6 +5,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 
+
 public final class LatePenalty {
 
     private static final long DAYS_PER_PENALTY_STEP = 1;
