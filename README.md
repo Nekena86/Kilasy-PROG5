@@ -1,6 +1,8 @@
 # Kilasy
 
-Kilasy is a programming exercise platform. Teachers publish exercises with a deadline, students submit their code or a link to their GitHub repository, and teachers then grade them. Students receive their grade by email.
+Kilasy is a programming exercise platform. Teachers publish exercises with a deadline, students submit their code or a link to their GitHub repository, and teachers then grade them. Students receive their grade by email and SMS (the SMS is simulated and written to the application console).
+
+The console SMS provider is selected by default (`kilasy.sms.provider=console`). A different provider can be plugged in through the `SmsSender` interface and selected with this property.
 
 Production version: 1.3.0.
 
@@ -62,7 +64,7 @@ curl -X POST http://localhost:8080/exercises/4/submissions \
   -d '{"studentId": 2, "repoUrl": "https://github.com/bob/reservation-api"}'
 ```
 
-Grade a submission, then check the email received at http://localhost:8025:
+Grade a submission, then check the email received at http://localhost:8025 and the simulated SMS in the application console:
 
 ```bash
 curl -X PUT http://localhost:8080/submissions/5/grade \

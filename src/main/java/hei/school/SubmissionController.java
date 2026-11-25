@@ -8,11 +8,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -23,11 +20,13 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class SubmissionController {
 
-    @Autowired
-    private JdbcTemplate jdbcTemplate;
+    private final JdbcTemplate jdbcTemplate;
+    private final GradeNotificationService gradeNotificationService;
 
-    @Autowired
-    private JavaMailSender mailSender;
+    public SubmissionController(JdbcTemplate jdbcTemplate, GradeNotificationService gradeNotificationService) {
+        this.jdbcTemplate = jdbcTemplate;
+        this.gradeNotificationService = gradeNotificationService;
+    }
 
     @PostMapping("/exercises/{id}/submissions")
     public ResponseEntity<?> submit(@PathVariable long id, @RequestBody Map<String, Object> body) {
@@ -145,28 +144,10 @@ public class SubmissionController {
         double grade = penalty.grade().doubleValue();
         boolean late = penalty.daysLate() > 0;
 
-        // notify the student by email
         String fullName = (String) row.get("full_name");
-        String firstName = fullName.split(" ")[0];
         String title = (String) row.get("title");
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom("notes@kilasy.test");
-        message.setTo((String) row.get("email"));
-        message.setSubject("Kilasy : nouvelle note pour " + title);
-        String text = "Bonjour " + firstName + ",\n\n"
-                + "Ta note pour « " + title + " » est disponible : " + grade + "/20.\n";
-        if (late) {
-            text += "Note avant pénalité : " + penalty.rawGrade() + "/20. "
-                    + "Pénalité de retard : " + penalty.penaltyPercent() + "% ("
-                    + penalty.daysLate() + " jour(s)).\n";
-        }
-        if (feedback != null && !feedback.isBlank()) {
-            text += "\nCommentaire de l'enseignant : " + feedback + "\n";
-        }
-        text += "\nL'équipe Kilasy";
-        message.setText(text);
-        mailSender.send(message);
-        System.out.println("Email de note envoyé à " + row.get("email"));
+        gradeNotificationService.notifyGrade(fullName, (String) row.get("email"), (String) row.get("phone"),
+                title, penalty, feedback);
 
         Map<String, Object> result = new HashMap<>();
         result.put("id", id);
